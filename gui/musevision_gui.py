@@ -1602,9 +1602,10 @@ class AppleStyleGUI:
 
         elif "PHASE 2: IMAGE GENERATION" in message:
             self.processing_phase = "comfyui"
-            self.status_var.set("🎨 ComfyUI Phase: Initializing AI image generation...")
-            self.update_overall_progress(25, "ComfyUI: Starting up")
-            self.current_progress.start()
+            self.status_var.set("🎨 ComfyUI Phase: Starting AI image generation...")
+            self.update_overall_progress(25, "ComfyUI: Initializing")
+            self.current_progress['value'] = 0
+            self.current_job_status.set("Starting ComfyUI...")
             self.log_to_console("🚀 Starting ComfyUI image generation phase...")
 
         elif "PHASE 3: CLEANUP" in message:
@@ -1629,49 +1630,61 @@ class AppleStyleGUI:
                 self.update_overall_progress(35, f"GPU: {self.total_jobs} jobs queued")
                 self.log_to_console(f"🎯 Submitted {self.total_jobs} jobs to ComfyUI queue")
 
-        # Enhanced job completion tracking - ONLY match actual progress counters, not summary messages
-        elif ("Job" in message and "completed" in message.lower()) or \
-             ("Completed:" in message and "/" in message):
-            # More specific regex to avoid false positives from summary messages
-            match = re.search(r'\((\d+)/(\d+)\)', message)
-            if not match:
-                match = re.search(r'Completed:\s*(\d+)/(\d+)', message)
+        # LLM Progress Tracking - Phase 1
+        elif "PHASE 1: LLM INFERENCE" in message:
+            self.processing_phase = "llm"
+            self.status_var.set("🤖 LLM Phase: Analyzing requirements and generating prompts...")
+            self.update_overall_progress(5, "LLM: Starting prompt generation")
+            self.current_progress['value'] = 0
+            self.current_job_status.set("Initializing LLM...")
+            self.log_to_console("🎯 Starting LLM inference phase...")
 
+        elif "LLM Job" in message and "/" in message:
+            # Track individual LLM jobs: "🔮 LLM Job 1/3: explore_narrative"
+            match = re.search(r'LLM Job (\d+)/(\d+)', message)
+            if match:
+                current_llm_job = int(match.group(1))
+                total_llm_jobs = int(match.group(2))
+                llm_progress = (current_llm_job / total_llm_jobs) * 100
+                self.current_progress['value'] = llm_progress
+                self.current_job_status.set(f"LLM Job {current_llm_job}/{total_llm_jobs}")
+                self.update_overall_progress(5 + (current_llm_job / total_llm_jobs) * 15, f"LLM: Processing job {current_llm_job}/{total_llm_jobs}")
+                self.log_to_console(f"🔮 {message.strip()}")
+
+        elif "🔮 Executing LLM job" in message:
+            self.current_job_status.set("Generating prompts...")
+            self.log_to_console(f"⚡ {message.strip()}")
+
+        # ComfyUI Job Completion Tracking - ONLY match specific completion messages with counters
+        elif message.strip().startswith("✅ Job") and "completed" in message.lower() and "(" in message and ")" in message:
+            # VERY specific match: "✅ Job abc123 completed in 5.2s - Prompt 1: description (2/5)"
+            match = re.search(r'\((\d+)/(\d+)\)', message)
             if match:
                 self.completed_jobs = int(match.group(1))
                 total = int(match.group(2))
                 self.total_jobs = total
 
-                # Calculate dynamic progress based on current phase
-                if self.processing_phase == "llm":
-                    # LLM phase: 5% to 25%
-                    progress = 5 + (self.completed_jobs / total) * 20
-                elif self.processing_phase == "comfyui":
-                    # ComfyUI phase: 35% to 95%
-                    progress = 35 + (self.completed_jobs / total) * 60
-                else:
-                    # Fallback
-                    progress = 40 + (self.completed_jobs / total) * 55
+                # Only update progress if we're actually in ComfyUI phase
+                if self.processing_phase == "comfyui":
+                    # ComfyUI phase: 25% to 95%
+                    progress = 25 + (self.completed_jobs / total) * 70
+                    self.update_overall_progress(progress)
 
-                self.update_overall_progress(progress)
-
-                # More informative status messages
-                if self.completed_jobs == 0:
-                    status_msg = f"🎨 Starting generation: {total} images to process"
-                elif self.completed_jobs == total:
-                    status_msg = f"✅ Complete: All {total} images generated successfully!"
-                    # Only mark as complete when we actually reach total
-                    if self.processing_phase == "comfyui":
+                    if self.completed_jobs == total:
+                        status_msg = f"✅ Complete: All {total} images generated successfully!"
                         self.processing_phase = "cleanup"
-                else:
-                    remaining = total - self.completed_jobs
-                    status_msg = f"🎨 Generating: {self.completed_jobs}/{total} complete ({remaining} remaining)"
+                    else:
+                        remaining = total - self.completed_jobs
+                        status_msg = f"🎨 Generating: {self.completed_jobs}/{total} complete ({remaining} remaining)"
 
-                self.status_var.set(status_msg)
-
-                # Log progress milestones
-                if self.completed_jobs % 5 == 0 or self.completed_jobs == total:
+                    self.status_var.set(status_msg)
                     self.log_to_console(f"📊 Progress: {self.completed_jobs}/{total} images generated")
+
+        # Prevent false completion from summary messages
+        elif "completed successfully" in message.lower() and "all" in message.lower():
+            # This is just a summary message, don't treat as completion
+            self.log_to_console(f"📋 {message.strip()}")
+            # Don't change progress or status
 
         # Track monitoring phase with queue status
         elif "JOB MONITORING PHASE" in message:
@@ -1687,6 +1700,13 @@ class AppleStyleGUI:
         # Track queue status updates
         elif "queue" in message.lower() and ("status" in message.lower() or "active" in message.lower()):
             self.log_to_console(f"📋 {message}")
+
+        # Track ComfyUI job starts
+        elif "Successfully submitted" in message and "jobs" in message:
+            # Reset current job tracking when new batch starts
+            self.current_progress['value'] = 0
+            self.current_job_status.set("Jobs submitted, waiting to start...")
+            self.log_to_console(f"📤 {message.strip()}")
 
         # Track ComfyUI step progress for current job
         elif self.processing_phase == "comfyui" and ("step" in message.lower() or "/" in message):
@@ -1710,10 +1730,11 @@ class AppleStyleGUI:
                 self.current_job_status.set(f"Processing: {percentage:.1f}%")
                 self.log_to_console(f"🔄 Job Progress: {message.strip()}")
 
-        # Reset current job progress when starting new job
-        elif "starting" in message.lower() and ("job" in message.lower() or "generation" in message.lower()):
+        # Track when individual jobs start processing
+        elif "starting" in message.lower() and ("job" in message.lower() or "generation" in message.lower() or "prompt" in message.lower()):
             self.current_progress['value'] = 0
-            self.current_job_status.set("Starting...")
+            self.current_job_status.set("Processing job...")
+            self.log_to_console(f"⚡ {message.strip()}")
 
         # Update simplified queue status
         if hasattr(self, 'simple_queue_status'):
