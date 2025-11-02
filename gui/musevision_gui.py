@@ -167,12 +167,6 @@ class AppleStyleGUI:
         
         # Bind tab change to update output directory and fix scrolling
         self.notebook.bind('<<NotebookTabChanged>>', self.on_tab_changed)
-        
-        # Live queue status panel
-        self.setup_live_queue_panel(main_frame)
-
-        # Live queue status panel
-        self.setup_live_queue_panel(main_frame)
 
         # Control panel at bottom
         self.setup_control_panel(main_frame)
@@ -187,80 +181,50 @@ class AppleStyleGUI:
         inner_frame = ttk.Frame(queue_card, style="AppleCard.TFrame")
         inner_frame.pack(fill='x', padx=20, pady=15)
 
-        # Header with title and refresh button
+        # Header with title and auto-update indicator
         header_frame = ttk.Frame(inner_frame, style="AppleCard.TFrame")
         header_frame.pack(fill='x', pady=(0, 10))
 
         ttk.Label(header_frame, text="📋 Live Batch Queue Status",
                  font=('Arial', 14, 'bold'), style="Apple.TLabel").pack(side='left')
 
-        ttk.Button(header_frame, text="🔄 Refresh",
-                  command=self.refresh_live_queue_status).pack(side='right')
+        self.auto_update_indicator = ttk.Label(header_frame, text="🔄 Auto-updating",
+                                              font=('Arial', 9), style="AppleSecondary.TLabel")
+        self.auto_update_indicator.pack(side='right')
 
-        # Queue status text area
-        self.queue_status_text = ScrolledText(inner_frame, height=6,
-                                            bg=self.colors['card_bg'],
-                                            fg=self.colors['text'],
-                                            font=('Courier', 9),
-                                            insertbackground=self.colors['text'],
-                                            selectbackground=self.colors['accent'],
-                                            selectforeground='white',
-                                            borderwidth=1,
-                                            highlightthickness=0,
-                                            wrap='word')
-        self.queue_status_text.pack(fill='both', expand=True)
-        self.queue_status_text.insert('1.0', "⏳ Ready - No active batches\nClick '🔄 Refresh' to check queue status")
-        self.queue_status_text.config(state='disabled')
+        # Start auto-update timer
+        self.start_queue_auto_update()
 
-        # Auto-refresh during processing
-        self.queue_auto_refresh = True
+    def start_queue_auto_update(self):
+        """Start automatic queue status updates"""
+        self.queue_auto_update_active = True
+        self.schedule_queue_update()
 
-    def setup_simplified_queue_status(self, parent):
-        """Setup simplified queue status display at bottom of control panel"""
-        # Queue status frame
-        queue_frame = ttk.Frame(parent, style="AppleCard.TFrame")
-        queue_frame.pack(fill='x', pady=(10, 0))
+    def stop_queue_auto_update(self):
+        """Stop automatic queue status updates"""
+        self.queue_auto_update_active = False
 
-        # Simple queue status label
-        self.simple_queue_status = tk.StringVar(value="📭 Queue: Empty")
-        queue_label = ttk.Label(queue_frame, textvariable=self.simple_queue_status,
-                               style="AppleSecondary.TLabel", font=('Arial', 10))
-        queue_label.pack(anchor='w', pady=5)
+    def schedule_queue_update(self):
+        """Schedule the next queue update"""
+        if hasattr(self, 'queue_auto_update_active') and self.queue_auto_update_active:
+            # Update every 5 seconds when processing, every 15 seconds otherwise
+            interval = 5000 if self.processing_phase in ["llm", "comfyui", "monitoring"] else 15000
+            self.root.after(interval, self.perform_queue_update)
 
-        # Hidden console text for compatibility (used by other methods)
-        self.console_text = ScrolledText(queue_frame, height=1, width=1)
-        self.console_text.pack_forget()  # Hide it completely
+    def perform_queue_update(self):
+        """Perform the actual queue update"""
+        if hasattr(self, 'queue_auto_update_active') and self.queue_auto_update_active:
+            try:
+                self.refresh_live_queue_status()
+                # Update indicator
+                if hasattr(self, 'auto_update_indicator'):
+                    current_time = time.strftime("%H:%M:%S")
+                    self.auto_update_indicator.config(text=f"🔄 Updated: {current_time}")
+            except Exception as e:
+                print(f"Auto-update error: {e}")
 
-    def update_simplified_queue_status(self, queue_output):
-        """Update the simplified queue status from queue command output"""
-        try:
-            lines = queue_output.split('\n')
-            active_jobs = 0
-            completed_jobs = 0
-
-            for line in lines:
-                line = line.lower().strip()
-                if 'active' in line or 'running' in line:
-                    # Extract number from lines like "Active: 3" or "3 jobs running"
-                    match = re.search(r'(\d+)', line)
-                    if match:
-                        active_jobs = int(match.group(1))
-                elif 'completed' in line:
-                    match = re.search(r'(\d+)', line)
-                    if match:
-                        completed_jobs = int(match.group(1))
-
-            # Update simplified status
-            if active_jobs > 0:
-                self.simple_queue_status.set(f"⚡ Active: {active_jobs} jobs")
-            elif completed_jobs > 0:
-                self.simple_queue_status.set(f"✅ Completed: {completed_jobs} jobs")
-            else:
-                self.simple_queue_status.set("📭 Queue: Empty")
-
-        except Exception:
-            # Fallback to basic status
-            self.simple_queue_status.set("📋 Queue: Checking...")
+            # Schedule next update
+            self.schedule_queue_update()
 
     def refresh_live_queue_status(self):
         """Refresh the live queue status display"""
@@ -1298,7 +1262,81 @@ class AppleStyleGUI:
     def get_image_list(self, var_name):
         """Get list of selected images"""
         return self.param_vars[var_name]
-    
+
+    def setup_simplified_queue_status(self, parent):
+        """Setup simplified queue status display at bottom of control panel"""
+        # Queue status frame
+        queue_frame = ttk.Frame(parent, style="AppleCard.TFrame")
+        queue_frame.pack(fill='x', pady=(10, 0))
+
+        # Simple queue status label
+        self.simple_queue_status = tk.StringVar(value="📭 Queue: Empty")
+        queue_label = ttk.Label(queue_frame, textvariable=self.simple_queue_status,
+                               style="AppleSecondary.TLabel", font=('Arial', 10))
+        queue_label.pack(anchor='w', pady=5)
+
+        # Initialize attributes for compatibility
+        # Create dummy widgets for compatibility
+        self.queue_status_text = tk.Text(queue_frame, height=1, width=1)
+        self.queue_status_text.pack_forget()  # Hide it
+
+        self.console_text = tk.Text(queue_frame, height=1, width=1)
+        self.console_text.pack_forget()  # Hide it
+
+        self.queue_auto_refresh = True
+
+    def update_simplified_queue_status(self, queue_output):
+        """Update the simplified queue status from queue command output and drive progress"""
+        try:
+            lines = queue_output.split('\n')
+            active_jobs = 0
+            completed_jobs = 0
+            total_jobs = 0
+
+            for line in lines:
+                line = line.lower().strip()
+                if 'active' in line or 'running' in line:
+                    # Extract number from lines like "Active: 3" or "3 jobs running"
+                    match = re.search(r'(\d+)', line)
+                    if match:
+                        active_jobs = int(match.group(1))
+                elif 'completed' in line:
+                    match = re.search(r'(\d+)', line)
+                    if match:
+                        completed_jobs = int(match.group(1))
+                elif 'total' in line and 'batch' in line:
+                    match = re.search(r'(\d+)', line)
+                    if match:
+                        total_jobs = int(match.group(1))
+
+            # Update overall progress based on queue status
+            if self.processing_phase in ["comfyui", "monitoring"] and total_jobs > 0:
+                # Calculate progress: completed jobs drive the progress bar
+                if completed_jobs >= total_jobs:
+                    # All jobs completed
+                    self.update_overall_progress(95, f"✅ All {total_jobs} jobs completed")
+                    if self.processing_phase == "comfyui":
+                        self.processing_phase = "cleanup"
+                elif active_jobs > 0 or completed_jobs > 0:
+                    # Jobs are running - progress based on completion ratio
+                    progress_ratio = completed_jobs / total_jobs
+                    progress_percent = 25 + (progress_ratio * 70)  # 25% to 95% range
+                    self.update_overall_progress(progress_percent,
+                        f"🎨 Processing: {completed_jobs}/{total_jobs} complete ({active_jobs} active)")
+
+            # Update simplified status
+            if active_jobs > 0:
+                self.simple_queue_status.set(f"⚡ Active: {active_jobs} jobs")
+            elif completed_jobs > 0:
+                self.simple_queue_status.set(f"✅ Completed: {completed_jobs} jobs")
+            else:
+                self.simple_queue_status.set("📭 Queue: Empty")
+
+        except Exception as e:
+            # Fallback to basic status
+            self.simple_queue_status.set("📋 Queue: Checking...")
+            print(f"Queue status parsing error: {e}")
+
     def run_current_process(self):
         """Run the process for the current tab"""
         selected_tab = self.notebook.select()
