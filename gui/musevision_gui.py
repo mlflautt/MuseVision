@@ -215,6 +215,53 @@ class AppleStyleGUI:
         # Auto-refresh during processing
         self.queue_auto_refresh = True
 
+    def setup_simplified_queue_status(self, parent):
+        """Setup simplified queue status display at bottom of control panel"""
+        # Queue status frame
+        queue_frame = ttk.Frame(parent, style="AppleCard.TFrame")
+        queue_frame.pack(fill='x', pady=(10, 0))
+
+        # Simple queue status label
+        self.simple_queue_status = tk.StringVar(value="📭 Queue: Empty")
+        queue_label = ttk.Label(queue_frame, textvariable=self.simple_queue_status,
+                               style="AppleSecondary.TLabel", font=('Arial', 10))
+        queue_label.pack(anchor='w', pady=5)
+
+        # Hidden console text for compatibility (used by other methods)
+        self.console_text = ScrolledText(queue_frame, height=1, width=1)
+        self.console_text.pack_forget()  # Hide it completely
+
+    def update_simplified_queue_status(self, queue_output):
+        """Update the simplified queue status from queue command output"""
+        try:
+            lines = queue_output.split('\n')
+            active_jobs = 0
+            completed_jobs = 0
+
+            for line in lines:
+                line = line.lower().strip()
+                if 'active' in line or 'running' in line:
+                    # Extract number from lines like "Active: 3" or "3 jobs running"
+                    match = re.search(r'(\d+)', line)
+                    if match:
+                        active_jobs = int(match.group(1))
+                elif 'completed' in line:
+                    match = re.search(r'(\d+)', line)
+                    if match:
+                        completed_jobs = int(match.group(1))
+
+            # Update simplified status
+            if active_jobs > 0:
+                self.simple_queue_status.set(f"⚡ Active: {active_jobs} jobs")
+            elif completed_jobs > 0:
+                self.simple_queue_status.set(f"✅ Completed: {completed_jobs} jobs")
+            else:
+                self.simple_queue_status.set("📭 Queue: Empty")
+
+        except Exception:
+            # Fallback to basic status
+            self.simple_queue_status.set("📋 Queue: Checking...")
+
     def refresh_live_queue_status(self):
         """Refresh the live queue status display"""
         try:
@@ -939,39 +986,28 @@ class AppleStyleGUI:
         self.overall_progress.pack(fill='both', expand=True)
         
         # Current job progress
-        ttk.Label(progress_frame, text="Current Job:", 
-                 style="Apple.TLabel", font=('Arial', 10)).pack(anchor='w')
-        
+        ttk.Label(progress_frame, text="Current Job:",
+                  style="Apple.TLabel", font=('Arial', 10)).pack(anchor='w')
+
         # Create frame with specific height for current progress
         current_frame = ttk.Frame(progress_frame, style="AppleCard.TFrame", height=20)
-        current_frame.pack(fill='x', pady=(2, 0))
+        current_frame.pack(fill='x', pady=(2, 5))
         current_frame.pack_propagate(False)
-        
-        self.current_progress = ttk.Progressbar(current_frame, mode='indeterminate')
+
+        self.current_progress = ttk.Progressbar(current_frame, mode='determinate', maximum=100)
         self.current_progress.pack(fill='both', expand=True)
+
+        # Current job status label
+        self.current_job_status = tk.StringVar(value="Ready")
+        current_status_label = ttk.Label(progress_frame, textvariable=self.current_job_status,
+                                        style="AppleSecondary.TLabel", font=('Arial', 9))
+        current_status_label.pack(anchor='w', pady=(0, 10))
         
         # Keep reference to old progress for compatibility
         self.progress = self.overall_progress
-        
-        # Console output
-        console_frame = ttk.Frame(inner_frame, style="AppleCard.TFrame")
-        console_frame.pack(fill='both', expand=True, pady=(10, 0))
-        
-        ttk.Label(console_frame, text="Console Output:", 
-                 style="Apple.TLabel", font=('Arial', 12, 'bold')).pack(anchor='w')
-        
-        self.console_text = ScrolledText(console_frame, height=8, 
-                                        bg=self.colors['card_bg'],
-                                        fg=self.colors['text'],
-                                        font=('Courier', 10),
-                                        insertbackground=self.colors['text'],
-                                        selectbackground=self.colors['accent'],
-                                        selectforeground='white',
-                                        borderwidth=1,
-                                        highlightthickness=0)
-        # Configure text widget to properly display Unicode
-        self.console_text.config(wrap='word')
-        self.console_text.pack(fill='both', expand=True, pady=(5, 0))
+
+        # Simplified queue status at bottom
+        self.setup_simplified_queue_status(inner_frame)
     
     def refresh_projects(self):
         """Refresh the project list from the projects directory"""
@@ -1511,6 +1547,8 @@ class AppleStyleGUI:
                         # Parse queue status for live updates
                         if result.returncode == 0:
                             self.parse_queue_status(result.stdout)
+                            # Also update simplified status
+                            self.update_simplified_queue_status(result.stdout)
 
                     # Auto-refresh live queue display every 15 seconds
                     if hasattr(self, 'queue_auto_refresh') and self.queue_auto_refresh:
@@ -1649,6 +1687,44 @@ class AppleStyleGUI:
         # Track queue status updates
         elif "queue" in message.lower() and ("status" in message.lower() or "active" in message.lower()):
             self.log_to_console(f"📋 {message}")
+
+        # Track ComfyUI step progress for current job
+        elif self.processing_phase == "comfyui" and ("step" in message.lower() or "/" in message):
+            # Look for patterns like "Step 5/20", "5/20", "Progress: 25%", etc.
+            step_match = re.search(r'(?:Step\s+)?(\d+)\s*/\s*(\d+)', message)
+            if step_match:
+                current_step = int(step_match.group(1))
+                total_steps = int(step_match.group(2))
+
+                if total_steps > 0:
+                    step_progress = (current_step / total_steps) * 100
+                    self.current_progress['value'] = step_progress
+                    self.current_job_status.set(f"Step {current_step}/{total_steps} ({step_progress:.0f}%)")
+                    self.log_to_console(f"🔄 Job Progress: {message.strip()}")
+
+            # Also look for percentage patterns
+            percent_match = re.search(r'(\d+(?:\.\d+)?)%', message)
+            if percent_match and not step_match:  # Only if we didn't find steps
+                percentage = float(percent_match.group(1))
+                self.current_progress['value'] = percentage
+                self.current_job_status.set(f"Processing: {percentage:.1f}%")
+                self.log_to_console(f"🔄 Job Progress: {message.strip()}")
+
+        # Reset current job progress when starting new job
+        elif "starting" in message.lower() and ("job" in message.lower() or "generation" in message.lower()):
+            self.current_progress['value'] = 0
+            self.current_job_status.set("Starting...")
+
+        # Update simplified queue status
+        if hasattr(self, 'simple_queue_status'):
+            if self.processing_phase == "comfyui" and self.total_jobs > 0:
+                active = getattr(self, 'total_jobs', 0) - getattr(self, 'completed_jobs', 0)
+                if active > 0:
+                    self.simple_queue_status.set(f"⚡ Active: {active} jobs processing")
+                else:
+                    self.simple_queue_status.set(f"📭 Queue: {self.total_jobs} jobs completed")
+            elif self.processing_phase == "idle":
+                self.simple_queue_status.set("📭 Queue: Empty")
 
         # Log to console with proper Unicode encoding
         self.log_to_console(message)
