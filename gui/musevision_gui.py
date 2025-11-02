@@ -168,9 +168,105 @@ class AppleStyleGUI:
         # Bind tab change to update output directory and fix scrolling
         self.notebook.bind('<<NotebookTabChanged>>', self.on_tab_changed)
         
+        # Live queue status panel
+        self.setup_live_queue_panel(main_frame)
+
+        # Live queue status panel
+        self.setup_live_queue_panel(main_frame)
+
         # Control panel at bottom
         self.setup_control_panel(main_frame)
-    
+
+    def setup_live_queue_panel(self, parent):
+        """Setup live queue status display panel"""
+        # Queue status card
+        queue_card = ttk.Frame(parent, style="AppleCard.TFrame")
+        queue_card.pack(fill='x', pady=(10, 0))
+
+        # Inner padding
+        inner_frame = ttk.Frame(queue_card, style="AppleCard.TFrame")
+        inner_frame.pack(fill='x', padx=20, pady=15)
+
+        # Header with title and refresh button
+        header_frame = ttk.Frame(inner_frame, style="AppleCard.TFrame")
+        header_frame.pack(fill='x', pady=(0, 10))
+
+        ttk.Label(header_frame, text="📋 Live Batch Queue Status",
+                 font=('Arial', 14, 'bold'), style="Apple.TLabel").pack(side='left')
+
+        ttk.Button(header_frame, text="🔄 Refresh",
+                  command=self.refresh_live_queue_status).pack(side='right')
+
+        # Queue status text area
+        self.queue_status_text = ScrolledText(inner_frame, height=6,
+                                            bg=self.colors['card_bg'],
+                                            fg=self.colors['text'],
+                                            font=('Courier', 9),
+                                            insertbackground=self.colors['text'],
+                                            selectbackground=self.colors['accent'],
+                                            selectforeground='white',
+                                            borderwidth=1,
+                                            highlightthickness=0,
+                                            wrap='word')
+        self.queue_status_text.pack(fill='both', expand=True)
+        self.queue_status_text.insert('1.0', "⏳ Ready - No active batches\nClick '🔄 Refresh' to check queue status")
+        self.queue_status_text.config(state='disabled')
+
+        # Auto-refresh during processing
+        self.queue_auto_refresh = True
+
+    def refresh_live_queue_status(self):
+        """Refresh the live queue status display"""
+        try:
+            cmd = [sys.executable, self.gpu_script_path, 'queue', 'status']
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', timeout=10)
+
+            self.queue_status_text.config(state='normal')
+            self.queue_status_text.delete('1.0', tk.END)
+
+            if result.returncode == 0:
+                # Format the output nicely
+                output_lines = result.stdout.strip().split('\n')
+                formatted_output = []
+
+                for line in output_lines:
+                    line = line.strip()
+                    if line:
+                        # Add some formatting for better readability
+                        if 'batch' in line.lower() and 'id:' in line.lower():
+                            formatted_output.append(f"🎯 {line}")
+                        elif 'status:' in line.lower():
+                            formatted_output.append(f"📊 {line}")
+                        elif 'active' in line.lower():
+                            formatted_output.append(f"⚡ {line}")
+                        elif 'completed' in line.lower():
+                            formatted_output.append(f"✅ {line}")
+                        elif 'failed' in line.lower():
+                            formatted_output.append(f"❌ {line}")
+                        else:
+                            formatted_output.append(line)
+
+                final_output = '\n'.join(formatted_output)
+                if not final_output.strip():
+                    final_output = "📭 No batches in queue"
+
+                self.queue_status_text.insert('1.0', final_output)
+            else:
+                self.queue_status_text.insert('1.0', f"❌ Error getting queue status:\n{result.stderr}")
+
+            self.queue_status_text.config(state='disabled')
+
+        except subprocess.TimeoutExpired:
+            self.queue_status_text.config(state='normal')
+            self.queue_status_text.delete('1.0', tk.END)
+            self.queue_status_text.insert('1.0', "⏱️ Queue status check timed out")
+            self.queue_status_text.config(state='disabled')
+        except Exception as e:
+            self.queue_status_text.config(state='normal')
+            self.queue_status_text.delete('1.0', tk.END)
+            self.queue_status_text.insert('1.0', f"❌ Error: {str(e)}")
+            self.queue_status_text.config(state='disabled')
+
     def setup_project_management_section(self, parent):
         """Setup enhanced project management with creation and selection"""
         # Card frame for project settings
@@ -814,8 +910,8 @@ class AppleStyleGUI:
                                   state='disabled')
         self.stop_btn.pack(side='left', padx=(0, 10))
         
-        ttk.Button(btn_frame, text="📊 Queue Status", 
-                  command=self.show_queue_status).pack(side='left', padx=(0, 10))
+        ttk.Button(btn_frame, text="📝 Console Output",
+                  command=self.show_console_output).pack(side='left', padx=(0, 10))
         
         ttk.Button(btn_frame, text="📁 Open Output", 
                   command=self.open_output_dir).pack(side='right')
@@ -1416,6 +1512,10 @@ class AppleStyleGUI:
                         if result.returncode == 0:
                             self.parse_queue_status(result.stdout)
 
+                    # Auto-refresh live queue display every 15 seconds
+                    if hasattr(self, 'queue_auto_refresh') and self.queue_auto_refresh:
+                        self.root.after(0, self.refresh_live_queue_status)
+
                 except Exception as e:
                     # Silently handle monitoring errors
                     pass
@@ -1491,15 +1591,13 @@ class AppleStyleGUI:
                 self.update_overall_progress(35, f"GPU: {self.total_jobs} jobs queued")
                 self.log_to_console(f"🎯 Submitted {self.total_jobs} jobs to ComfyUI queue")
 
-        # Enhanced job completion tracking with better regex and status
-        elif ("completed" in message.lower() and ("(" in message and ")" in message)) or \
+        # Enhanced job completion tracking - ONLY match actual progress counters, not summary messages
+        elif ("Job" in message and "completed" in message.lower()) or \
              ("Completed:" in message and "/" in message):
-            # More robust regex to catch various completion formats
+            # More specific regex to avoid false positives from summary messages
             match = re.search(r'\((\d+)/(\d+)\)', message)
             if not match:
                 match = re.search(r'Completed:\s*(\d+)/(\d+)', message)
-            if not match:
-                match = re.search(r'(\d+)/(\d+)', message)
 
             if match:
                 self.completed_jobs = int(match.group(1))
@@ -1524,6 +1622,9 @@ class AppleStyleGUI:
                     status_msg = f"🎨 Starting generation: {total} images to process"
                 elif self.completed_jobs == total:
                     status_msg = f"✅ Complete: All {total} images generated successfully!"
+                    # Only mark as complete when we actually reach total
+                    if self.processing_phase == "comfyui":
+                        self.processing_phase = "cleanup"
                 else:
                     remaining = total - self.completed_jobs
                     status_msg = f"🎨 Generating: {self.completed_jobs}/{total} complete ({remaining} remaining)"
@@ -1655,7 +1756,46 @@ class AppleStyleGUI:
             text_widget.delete('1.0', tk.END)
             text_widget.insert('1.0', f"Error refreshing status: {str(e)}")
             text_widget.config(state='disabled')
-    
+
+    def show_console_output(self):
+        """Show console output in a popup window"""
+        # Create popup window
+        popup = tk.Toplevel(self.root)
+        popup.title("Console Output - Processing Log")
+        popup.geometry("900x600")
+        popup.configure(bg=self.colors['bg'])
+
+        # Header
+        header_frame = ttk.Frame(popup, style="AppleCard.TFrame")
+        header_frame.pack(fill='x', padx=20, pady=(20, 10))
+
+        ttk.Label(header_frame, text="📝 Processing Console Output",
+                 font=('Arial', 14, 'bold'), style="Apple.TLabel").pack(side='left')
+
+        ttk.Button(header_frame, text="🗑️ Clear",
+                  command=lambda: self.console_text.delete('1.0', tk.END)).pack(side='right')
+
+        # Console text area
+        text_frame = ttk.Frame(popup, style="Apple.TFrame")
+        text_frame.pack(fill='both', expand=True, padx=20, pady=(10, 20))
+
+        # Copy the current console content to the popup
+        console_content = self.console_text.get('1.0', tk.END)
+
+        console_display = ScrolledText(text_frame,
+                                     bg=self.colors['card_bg'],
+                                     fg=self.colors['text'],
+                                     font=('Courier', 10),
+                                     insertbackground=self.colors['text'],
+                                     selectbackground=self.colors['accent'],
+                                     selectforeground='white',
+                                     borderwidth=1,
+                                     highlightthickness=0,
+                                     wrap='word')
+        console_display.pack(fill='both', expand=True)
+        console_display.insert('1.0', console_content)
+        console_display.config(state='disabled')  # Make read-only
+
     def run(self):
         """Start the GUI application"""
         self.root.mainloop()
