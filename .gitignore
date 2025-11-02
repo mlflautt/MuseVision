@@ -1,0 +1,82 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+comfyui_*.log
+
+# Audio/Video files
+*.mp3
+*.wav
+*.mp4
+*.avi
+
+# Large model directories (users should download separately)
+models/
+ComfyUI/
+LoRA_training/
+
+# User projects and generated content
+projects/
+_export/
+refined_analysis/
+final_video_production/
+musevision-fileshare/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+*.bak
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Node modules (if any)
+node_modules/
+
+# Test outputs
+LoRA_tests/
+Qwen Ep59 Workflows/
