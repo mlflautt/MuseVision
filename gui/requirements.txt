@@ -1,0 +1,8 @@
+# MuseVision GUI Requirements
+# These packages are typically included with Python, but listed here for completeness
+
+# Core GUI framework (included with Python)
+tkinter
+
+# Additional packages that might be needed
+Pillow>=8.0.0   # For better image handling if needed in future

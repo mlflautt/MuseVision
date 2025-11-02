@@ -1,0 +1,22 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=MuseVision
+Comment=Creative AI Batch Processing GUI
+Exec=/home/mitchellflautt/MuseVision/launch_gui.py
+Icon=/home/mitchellflautt/MuseVision/Logos/Logo4.png
+Path=/home/mitchellflautt/MuseVision
+Terminal=false
+Categories=Graphics;Photography;AudioVideo;Development;
+Keywords=AI;Image;Generation;Creative;Batch;Processing;LoRA;ComfyUI;
+StartupNotify=true
+MimeType=image/png;image/jpeg;
+Actions=OpenProject;ShowQueue;
+
+[Desktop Action OpenProject]
+Name=Open Project Folder
+Exec=xdg-open /home/mitchellflautt/MuseVision/projects
+
+[Desktop Action ShowQueue]
+Name=Show Queue Status
+Exec=/home/mitchellflautt/MuseVision/scripts/gpu_optimized_agent.py queue status
