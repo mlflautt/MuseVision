@@ -1,0 +1,6 @@
+sdxl_dir: "/home/mitchellflautt/MuseVision/models/SDXL"
+flux_dir: "/home/mitchellflautt/MuseVision/models/Flux"
+sdxl_lora_dir: "/home/mitchellflautt/MuseVision/models/LoRAs/SDXL"
+flux_lora_dir: "/home/mitchellflautt/MuseVision/models/LoRAs/Flux"
+llm_dir: "/home/mitchellflautt/MuseVision/models/LLM"
+

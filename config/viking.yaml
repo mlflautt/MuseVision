@@ -1,0 +1,10 @@
+# config/viking.yaml
+
+# API
+endpoint:    "https://vikingdocs.york.ac.uk/api"
+api_key:     "<YOUR_VIKING_API_KEY>"
+
+# SLURM settings
+ssh_user:      "kpl524"
+ssh_host:    "viking.york.ac.uk"
+slurm_account: "act-artificial-2025"

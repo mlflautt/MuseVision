@@ -1,0 +1,21 @@
+wide-angle lens
+standard lens
+telephoto lens
+macro lens
+tilt-shift lens
+soft focus
+shallow depth of field
+deep focus
+hyperfocal focus
+rack focus
+split diopter
+sharp foreground, soft background
+soft foreground, sharp subject
+infinite focus
+pinhole look
+telecentric look
+zero perspective distortion
+no motion blur
+long exposure
+fast shutter speed
+freeze-frame

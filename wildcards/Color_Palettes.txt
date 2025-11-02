@@ -1,0 +1,26 @@
+monochromatic palette
+analogous colors
+complementary colors
+triadic colors
+tetradic colors
+split-complementary
+warm color palette
+cool color palette
+pastel color palette
+vibrant colors
+muted colors
+earthy-tones
+jewel-tones
+primary colors
+secondary colors
+tertiary colors
+black and white
+sepia tone
+cyanotype
+cross-processed
+technicolor
+psychedelic colors
+neon colors
+vaporwave-aesthetic
+noir-aesthetic
+dreamy-colors
