@@ -1305,6 +1305,9 @@ class AppleStyleGUI:
         self.processing_phase = "initializing"
         self.total_jobs = 0
         self.completed_jobs = 0
+        self.failed_jobs = 0
+        self.last_progress_update = time.time()
+        self.progress_monitor_thread = None
         
         # Start process in background thread
         def run_process():
@@ -1339,6 +1342,9 @@ class AppleStyleGUI:
         self.monitoring_thread = threading.Thread(target=run_process)
         self.monitoring_thread.daemon = True
         self.monitoring_thread.start()
+
+        # Start progress monitoring
+        self.start_progress_monitoring()
     
     def stop_current_process(self):
         """Stop the current process"""
@@ -1368,6 +1374,10 @@ class AppleStyleGUI:
         
         self.current_process = None
         self.processing_phase = "idle"
+
+        # Stop progress monitoring
+        if self.progress_monitor_thread and self.progress_monitor_thread.is_alive():
+            self.progress_monitor_thread = None
     
     def process_error(self, process_name, error_msg):
         """Handle process error"""
@@ -1384,66 +1394,161 @@ class AppleStyleGUI:
         self.overall_progress['value'] = min(100, max(0, percentage))
         if status_text:
             self.status_var.set(status_text)
+
+    def start_progress_monitoring(self):
+        """Start background monitoring of batch progress"""
+        if self.progress_monitor_thread and self.progress_monitor_thread.is_alive():
+            return
+
+        def monitor_progress():
+            while self.processing_phase in ["llm", "comfyui", "monitoring"]:
+                try:
+                    # Check queue status every 10 seconds
+                    time.sleep(10)
+
+                    if self.processing_phase in ["comfyui", "monitoring"] and self.total_jobs > 0:
+                        # Get current queue status
+                        cmd = [sys.executable, self.gpu_script_path, 'queue', 'status']
+                        result = subprocess.run(cmd, capture_output=True, text=True,
+                                              encoding='utf-8', timeout=5)
+
+                        # Parse queue status for live updates
+                        if result.returncode == 0:
+                            self.parse_queue_status(result.stdout)
+
+                except Exception as e:
+                    # Silently handle monitoring errors
+                    pass
+
+                # Stop monitoring if process is complete
+                if self.processing_phase in ["cleanup", "idle"]:
+                    break
+
+        self.progress_monitor_thread = threading.Thread(target=monitor_progress, daemon=True)
+        self.progress_monitor_thread.start()
+
+    def parse_queue_status(self, queue_output):
+        """Parse queue status output for live progress updates"""
+        import re
+
+        # Look for active job counts
+        lines = queue_output.split('\n')
+        for line in lines:
+            line = line.strip()
+            if 'active' in line.lower() or 'running' in line.lower():
+                # Try to extract numbers
+                match = re.search(r'(\d+)', line)
+                if match:
+                    active_jobs = int(match.group(1))
+                    if active_jobs > 0 and hasattr(self, 'total_jobs') and self.total_jobs > 0:
+                        # Estimate progress based on active jobs
+                        estimated_completed = self.total_jobs - active_jobs
+                        if estimated_completed > self.completed_jobs:
+                            self.completed_jobs = estimated_completed
+                            progress = 35 + (self.completed_jobs / self.total_jobs) * 60
+                            self.update_overall_progress(progress,
+                                f"🎨 Active: {active_jobs} jobs processing, {self.completed_jobs}/{self.total_jobs} complete")
+                            self.log_to_console(f"📊 Queue status: {active_jobs} active, {self.completed_jobs}/{self.total_jobs} complete")
     
     def parse_and_log_output(self, message):
         """Parse output for status updates and log to console"""
         import re
-        
-        # Detect processing phases
+
+        # Detect processing phases with better progress tracking
         if "PHASE 1: LLM INFERENCE" in message:
             self.processing_phase = "llm"
-            self.status_var.set("LLM Generation Phase - Creating prompts...")
-            self.update_overall_progress(10, "LLM: Generating prompts")
+            self.status_var.set("🤖 LLM Phase: Generating creative prompts...")
+            self.update_overall_progress(5, "LLM: Analyzing requirements")
             self.current_progress.start()
-            
+            self.log_to_console("🎯 Starting LLM inference phase...")
+
         elif "PHASE 2: IMAGE GENERATION" in message:
             self.processing_phase = "comfyui"
-            self.status_var.set("ComfyUI Phase - Starting image generation...")
-            self.update_overall_progress(30, "ComfyUI: Initializing batch")
+            self.status_var.set("🎨 ComfyUI Phase: Initializing AI image generation...")
+            self.update_overall_progress(25, "ComfyUI: Starting up")
             self.current_progress.start()
-            
+            self.log_to_console("🚀 Starting ComfyUI image generation phase...")
+
         elif "PHASE 3: CLEANUP" in message:
             self.processing_phase = "cleanup"
-            self.status_var.set("Cleaning up...")
-            self.update_overall_progress(95, "Finalizing")
+            self.status_var.set("🧹 Finalizing: Cleaning up temporary files...")
+            self.update_overall_progress(98, "Finalizing results")
             self.current_progress.stop()
-        
-        # Track batch submission
+            self.log_to_console("✨ Processing complete, finalizing...")
+
+        # Track batch submission with queue integration
         elif "BATCH SUBMISSION PHASE" in message:
-            self.status_var.set("ComfyUI: Submitting batch jobs...")
-            self.update_overall_progress(35)
-            
-        elif "Submission Summary" in message:
-            # Extract total jobs from submission summary
-            self.status_var.set("ComfyUI: Jobs submitted, processing...")
-            self.update_overall_progress(40)
-        
-        # Track successful submissions
+            self.status_var.set("📤 Queue Phase: Preparing jobs for GPU processing...")
+            self.update_overall_progress(30, "Queue: Preparing batch jobs")
+            self.log_to_console("📋 Preparing batch submission...")
+
         elif "Successfully submitted:" in message:
             match = re.search(r'Successfully submitted: (\d+)', message)
             if match:
                 self.total_jobs = int(match.group(1))
-                self.status_var.set(f"ComfyUI: Processing batch ({self.total_jobs} jobs)")
-        
-        # Track job completions with detailed progress
-        elif "Job" in message and "completed" in message:
+                self.completed_jobs = 0
+                self.status_var.set(f"⚡ GPU Processing: {self.total_jobs} jobs queued for generation")
+                self.update_overall_progress(35, f"GPU: {self.total_jobs} jobs queued")
+                self.log_to_console(f"🎯 Submitted {self.total_jobs} jobs to ComfyUI queue")
+
+        # Enhanced job completion tracking with better regex and status
+        elif ("completed" in message.lower() and ("(" in message and ")" in message)) or \
+             ("Completed:" in message and "/" in message):
+            # More robust regex to catch various completion formats
             match = re.search(r'\((\d+)/(\d+)\)', message)
+            if not match:
+                match = re.search(r'Completed:\s*(\d+)/(\d+)', message)
+            if not match:
+                match = re.search(r'(\d+)/(\d+)', message)
+
             if match:
                 self.completed_jobs = int(match.group(1))
                 total = int(match.group(2))
                 self.total_jobs = total
-                
-                # Calculate progress (40% to 95% range for ComfyUI phase)
-                if total > 0:
-                    job_progress = (self.completed_jobs / total) * 55  # 55% of total progress bar
-                    overall = 40 + job_progress  # Start at 40%, end at 95%
-                    self.update_overall_progress(overall)
-                    self.status_var.set(f"ComfyUI: Processing batch ({self.completed_jobs}/{total})")
-        
-        # Track monitoring phase
+
+                # Calculate dynamic progress based on current phase
+                if self.processing_phase == "llm":
+                    # LLM phase: 5% to 25%
+                    progress = 5 + (self.completed_jobs / total) * 20
+                elif self.processing_phase == "comfyui":
+                    # ComfyUI phase: 35% to 95%
+                    progress = 35 + (self.completed_jobs / total) * 60
+                else:
+                    # Fallback
+                    progress = 40 + (self.completed_jobs / total) * 55
+
+                self.update_overall_progress(progress)
+
+                # More informative status messages
+                if self.completed_jobs == 0:
+                    status_msg = f"🎨 Starting generation: {total} images to process"
+                elif self.completed_jobs == total:
+                    status_msg = f"✅ Complete: All {total} images generated successfully!"
+                else:
+                    remaining = total - self.completed_jobs
+                    status_msg = f"🎨 Generating: {self.completed_jobs}/{total} complete ({remaining} remaining)"
+
+                self.status_var.set(status_msg)
+
+                # Log progress milestones
+                if self.completed_jobs % 5 == 0 or self.completed_jobs == total:
+                    self.log_to_console(f"📊 Progress: {self.completed_jobs}/{total} images generated")
+
+        # Track monitoring phase with queue status
         elif "JOB MONITORING PHASE" in message:
-            self.status_var.set("ComfyUI: Monitoring job progress...")
-        
+            self.status_var.set("👀 Monitoring: Tracking job progress in real-time...")
+            self.update_overall_progress(40, "Monitoring: Active processing")
+            self.log_to_console("🔍 Activating real-time job monitoring...")
+
+        # Track failures and errors
+        elif "failed" in message.lower() or "error" in message.lower():
+            self.status_var.set("⚠️ Issue detected - check console for details")
+            self.log_to_console(f"⚠️ {message}")
+
+        # Track queue status updates
+        elif "queue" in message.lower() and ("status" in message.lower() or "active" in message.lower()):
+            self.log_to_console(f"📋 {message}")
+
         # Log to console with proper Unicode encoding
         self.log_to_console(message)
     
@@ -1467,18 +1572,35 @@ class AppleStyleGUI:
         try:
             # Run with UTF-8 encoding
             result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8')
-            
+
             # Create popup window
             popup = tk.Toplevel(self.root)
-            popup.title("Queue Status")
-            popup.geometry("700x500")
+            popup.title("Batch Queue Status - Real-time Processing")
+            popup.geometry("800x600")
             popup.configure(bg=self.colors['bg'])
-            
+
+            # Header with current processing info
+            header_frame = ttk.Frame(popup, style="AppleCard.TFrame")
+            header_frame.pack(fill='x', padx=20, pady=(20, 10))
+
+            ttk.Label(header_frame, text="🎨 MuseVision Batch Processing Status",
+                     font=('Arial', 14, 'bold'), style="Apple.TLabel").pack()
+
+            if hasattr(self, 'processing_phase') and self.processing_phase:
+                phase_text = f"Current Phase: {self.processing_phase.upper()}"
+                ttk.Label(header_frame, text=phase_text,
+                         font=('Arial', 11), style="AppleSecondary.TLabel").pack(pady=(5, 0))
+
+            if hasattr(self, 'total_jobs') and self.total_jobs > 0:
+                progress_text = f"Progress: {getattr(self, 'completed_jobs', 0)}/{self.total_jobs} jobs"
+                ttk.Label(header_frame, text=progress_text,
+                         font=('Arial', 11), style="Apple.TLabel").pack(pady=(2, 0))
+
             # Text widget for status
             text_frame = ttk.Frame(popup, style="Apple.TFrame")
-            text_frame.pack(fill='both', expand=True, padx=20, pady=20)
-            
-            text_widget = ScrolledText(text_frame, 
+            text_frame.pack(fill='both', expand=True, padx=20, pady=(10, 20))
+
+            text_widget = ScrolledText(text_frame,
                                       bg=self.colors['card_bg'],
                                       fg=self.colors['text'],
                                       font=('Courier', 10),
@@ -1489,7 +1611,7 @@ class AppleStyleGUI:
                                       highlightthickness=0,
                                       wrap='word')
             text_widget.pack(fill='both', expand=True)
-            
+
             # Insert text with proper Unicode handling
             try:
                 text_widget.insert('1.0', result.stdout)
@@ -1497,11 +1619,42 @@ class AppleStyleGUI:
                 # Fallback if there are encoding issues
                 safe_text = result.stdout.encode('utf-8', errors='replace').decode('utf-8')
                 text_widget.insert('1.0', safe_text)
-            
+
             text_widget.config(state='disabled')  # Make read-only
-            
+
+            # Add refresh button
+            button_frame = ttk.Frame(popup, style="Apple.TFrame")
+            button_frame.pack(fill='x', padx=20, pady=(0, 20))
+
+            ttk.Button(button_frame, text="🔄 Refresh Status",
+                      command=lambda: self.refresh_queue_status(text_widget)).pack(side='right')
+
         except Exception as e:
             messagebox.showerror("Error", f"Failed to get queue status: {str(e)}")
+
+    def refresh_queue_status(self, text_widget):
+        """Refresh the queue status in the popup window"""
+        cmd = [sys.executable, self.gpu_script_path, 'queue', 'status']
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8')
+
+            # Clear and update text
+            text_widget.config(state='normal')
+            text_widget.delete('1.0', tk.END)
+
+            try:
+                text_widget.insert('1.0', result.stdout)
+            except:
+                safe_text = result.stdout.encode('utf-8', errors='replace').decode('utf-8')
+                text_widget.insert('1.0', safe_text)
+
+            text_widget.config(state='disabled')
+
+        except Exception as e:
+            text_widget.config(state='normal')
+            text_widget.delete('1.0', tk.END)
+            text_widget.insert('1.0', f"Error refreshing status: {str(e)}")
+            text_widget.config(state='disabled')
     
     def run(self):
         """Start the GUI application"""
