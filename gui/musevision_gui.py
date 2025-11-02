@@ -185,10 +185,10 @@ class AppleStyleGUI:
         header_frame = ttk.Frame(inner_frame, style="AppleCard.TFrame")
         header_frame.pack(fill='x', pady=(0, 10))
 
-        ttk.Label(header_frame, text="📋 Live Batch Queue Status",
+        ttk.Label(header_frame, text="Live Batch Queue Status",
                  font=('Arial', 14, 'bold'), style="Apple.TLabel").pack(side='left')
 
-        self.auto_update_indicator = ttk.Label(header_frame, text="🔄 Auto-updating",
+        self.auto_update_indicator = ttk.Label(header_frame, text="Auto-updating",
                                               font=('Arial', 9), style="AppleSecondary.TLabel")
         self.auto_update_indicator.pack(side='right')
 
@@ -219,7 +219,7 @@ class AppleStyleGUI:
                 # Update indicator
                 if hasattr(self, 'auto_update_indicator'):
                     current_time = time.strftime("%H:%M:%S")
-                    self.auto_update_indicator.config(text=f"🔄 Updated: {current_time}")
+                    self.auto_update_indicator.config(text=f"Updated: {current_time}")
             except Exception as e:
                 print(f"Auto-update error: {e}")
 
@@ -245,13 +245,13 @@ class AppleStyleGUI:
                     if line:
                         # Add some formatting for better readability
                         if 'batch' in line.lower() and 'id:' in line.lower():
-                            formatted_output.append(f"🎯 {line}")
+                            formatted_output.append(f"[BATCH] {line}")
                         elif 'status:' in line.lower():
-                            formatted_output.append(f"📊 {line}")
+                            formatted_output.append(f"[STATUS] {line}")
                         elif 'active' in line.lower():
-                            formatted_output.append(f"⚡ {line}")
+                            formatted_output.append(f"[ACTIVE] {line}")
                         elif 'completed' in line.lower():
-                            formatted_output.append(f"✅ {line}")
+                            formatted_output.append(f"[DONE] {line}")
                         elif 'failed' in line.lower():
                             formatted_output.append(f"❌ {line}")
                         else:
@@ -259,7 +259,7 @@ class AppleStyleGUI:
 
                 final_output = '\n'.join(formatted_output)
                 if not final_output.strip():
-                    final_output = "📭 No batches in queue"
+                    final_output = "No batches in queue"
 
                 self.queue_status_text.insert('1.0', final_output)
             else:
@@ -921,7 +921,7 @@ class AppleStyleGUI:
                                   state='disabled')
         self.stop_btn.pack(side='left', padx=(0, 10))
         
-        ttk.Button(btn_frame, text="📝 Console Output",
+        ttk.Button(btn_frame, text="Console Output",
                   command=self.show_console_output).pack(side='left', padx=(0, 10))
         
         ttk.Button(btn_frame, text="📁 Open Output", 
@@ -1270,7 +1270,7 @@ class AppleStyleGUI:
         queue_frame.pack(fill='x', pady=(10, 0))
 
         # Simple queue status label
-        self.simple_queue_status = tk.StringVar(value="📭 Queue: Empty")
+        self.simple_queue_status = tk.StringVar(value="Queue: Empty")
         queue_label = ttk.Label(queue_frame, textvariable=self.simple_queue_status,
                                style="AppleSecondary.TLabel", font=('Arial', 10))
         queue_label.pack(anchor='w', pady=5)
@@ -1314,7 +1314,7 @@ class AppleStyleGUI:
                 # Calculate progress: completed jobs drive the progress bar
                 if completed_jobs >= total_jobs:
                     # All jobs completed
-                    self.update_overall_progress(95, f"✅ All {total_jobs} jobs completed")
+                    self.update_overall_progress(95, f"All {total_jobs} jobs completed")
                     if self.processing_phase == "comfyui":
                         self.processing_phase = "cleanup"
                 elif active_jobs > 0 or completed_jobs > 0:
@@ -1322,19 +1322,19 @@ class AppleStyleGUI:
                     progress_ratio = completed_jobs / total_jobs
                     progress_percent = 25 + (progress_ratio * 70)  # 25% to 95% range
                     self.update_overall_progress(progress_percent,
-                        f"🎨 Processing: {completed_jobs}/{total_jobs} complete ({active_jobs} active)")
+                        f"Processing: {completed_jobs}/{total_jobs} complete ({active_jobs} active)")
 
             # Update simplified status
             if active_jobs > 0:
-                self.simple_queue_status.set(f"⚡ Active: {active_jobs} jobs")
+                self.simple_queue_status.set(f"Active: {active_jobs} jobs")
             elif completed_jobs > 0:
-                self.simple_queue_status.set(f"✅ Completed: {completed_jobs} jobs")
+                self.simple_queue_status.set(f"Completed: {completed_jobs} jobs")
             else:
-                self.simple_queue_status.set("📭 Queue: Empty")
+                self.simple_queue_status.set("Queue: Empty")
 
         except Exception as e:
             # Fallback to basic status
-            self.simple_queue_status.set("📋 Queue: Checking...")
+            self.simple_queue_status.set("Queue: Checking...")
             print(f"Queue status parsing error: {e}")
 
     def run_current_process(self):
@@ -1531,9 +1531,9 @@ class AppleStyleGUI:
         self.current_progress.stop()
         
         if success:
-            self.status_var.set(f"✅ {process_name} completed successfully!")
+            self.status_var.set(f"{process_name} completed successfully!")
             self.log_to_console("="*60)
-            self.log_to_console(f"✅ {process_name} COMPLETED SUCCESSFULLY")
+            self.log_to_console(f"{process_name} COMPLETED SUCCESSFULLY")
             self.log_to_console(f"Total jobs processed: {self.completed_jobs}/{self.total_jobs}")
             self.log_to_console("="*60)
         else:
@@ -1623,8 +1623,8 @@ class AppleStyleGUI:
                             self.completed_jobs = estimated_completed
                             progress = 35 + (self.completed_jobs / self.total_jobs) * 60
                             self.update_overall_progress(progress,
-                                f"🎨 Active: {active_jobs} jobs processing, {self.completed_jobs}/{self.total_jobs} complete")
-                            self.log_to_console(f"📊 Queue status: {active_jobs} active, {self.completed_jobs}/{self.total_jobs} complete")
+                                f"Active: {active_jobs} jobs processing, {self.completed_jobs}/{self.total_jobs} complete")
+                            self.log_to_console(f"Queue status: {active_jobs} active, {self.completed_jobs}/{self.total_jobs} complete")
     
     def parse_and_log_output(self, message):
         """Parse output for status updates and log to console"""
@@ -1633,14 +1633,14 @@ class AppleStyleGUI:
         # Detect processing phases with better progress tracking
         if "PHASE 1: LLM INFERENCE" in message:
             self.processing_phase = "llm"
-            self.status_var.set("🤖 LLM Phase: Generating creative prompts...")
+            self.status_var.set("LLM Phase: Generating creative prompts...")
             self.update_overall_progress(5, "LLM: Analyzing requirements")
             self.current_progress.start()
-            self.log_to_console("🎯 Starting LLM inference phase...")
+            self.log_to_console("Starting LLM inference phase...")
 
         elif "PHASE 2: IMAGE GENERATION" in message:
             self.processing_phase = "comfyui"
-            self.status_var.set("🎨 ComfyUI Phase: Starting AI image generation...")
+            self.status_var.set("ComfyUI Phase: Starting AI image generation...")
             self.update_overall_progress(25, "ComfyUI: Initializing")
             self.current_progress['value'] = 0
             self.current_job_status.set("Starting ComfyUI...")
@@ -1648,34 +1648,33 @@ class AppleStyleGUI:
 
         elif "PHASE 3: CLEANUP" in message:
             self.processing_phase = "cleanup"
-            self.status_var.set("🧹 Finalizing: Cleaning up temporary files...")
+            self.status_var.set("Finalizing: Cleaning up temporary files...")
             self.update_overall_progress(98, "Finalizing results")
             self.current_progress.stop()
             self.log_to_console("✨ Processing complete, finalizing...")
 
         # Track batch submission with queue integration
         elif "BATCH SUBMISSION PHASE" in message:
-            self.status_var.set("📤 Queue Phase: Preparing jobs for GPU processing...")
+            self.status_var.set("Queue Phase: Preparing jobs for GPU processing...")
             self.update_overall_progress(30, "Queue: Preparing batch jobs")
-            self.log_to_console("📋 Preparing batch submission...")
+            self.log_to_console("Preparing batch submission...")
 
         elif "Successfully submitted:" in message:
             match = re.search(r'Successfully submitted: (\d+)', message)
             if match:
                 self.total_jobs = int(match.group(1))
                 self.completed_jobs = 0
-                self.status_var.set(f"⚡ GPU Processing: {self.total_jobs} jobs queued for generation")
+                self.status_var.set(f"GPU Processing: {self.total_jobs} jobs queued for generation")
                 self.update_overall_progress(35, f"GPU: {self.total_jobs} jobs queued")
-                self.log_to_console(f"🎯 Submitted {self.total_jobs} jobs to ComfyUI queue")
+                self.log_to_console(f"Submitted {self.total_jobs} jobs to ComfyUI queue")
 
         # LLM Progress Tracking - Phase 1
         elif "PHASE 1: LLM INFERENCE" in message:
             self.processing_phase = "llm"
-            self.status_var.set("🤖 LLM Phase: Analyzing requirements and generating prompts...")
+            self.status_var.set("LLM Phase: Analyzing requirements and generating prompts...")
             self.update_overall_progress(5, "LLM: Starting prompt generation")
-            self.current_progress['value'] = 0
-            self.current_job_status.set("Initializing LLM...")
-            self.log_to_console("🎯 Starting LLM inference phase...")
+            self.current_progress.start()
+            self.log_to_console("Starting LLM inference phase...")
 
         elif "LLM Job" in message and "/" in message:
             # Track individual LLM jobs: "🔮 LLM Job 1/3: explore_narrative"
@@ -1694,7 +1693,7 @@ class AppleStyleGUI:
             self.log_to_console(f"⚡ {message.strip()}")
 
         # ComfyUI Job Completion Tracking - ONLY match specific completion messages with counters
-        elif message.strip().startswith("✅ Job") and "completed" in message.lower() and "(" in message and ")" in message:
+        elif message.strip().startswith("Job") and "completed" in message.lower() and "(" in message and ")" in message:
             # VERY specific match: "✅ Job abc123 completed in 5.2s - Prompt 1: description (2/5)"
             match = re.search(r'\((\d+)/(\d+)\)', message)
             if match:
@@ -1709,42 +1708,42 @@ class AppleStyleGUI:
                     self.update_overall_progress(progress)
 
                     if self.completed_jobs == total:
-                        status_msg = f"✅ Complete: All {total} images generated successfully!"
+                        status_msg = f"Complete: All {total} images generated successfully!"
                         self.processing_phase = "cleanup"
                     else:
                         remaining = total - self.completed_jobs
-                        status_msg = f"🎨 Generating: {self.completed_jobs}/{total} complete ({remaining} remaining)"
+                        status_msg = f"Generating: {self.completed_jobs}/{total} complete ({remaining} remaining)"
 
                     self.status_var.set(status_msg)
-                    self.log_to_console(f"📊 Progress: {self.completed_jobs}/{total} images generated")
+                    self.log_to_console(f"Progress: {self.completed_jobs}/{total} images generated")
 
         # Prevent false completion from summary messages
         elif "completed successfully" in message.lower() and "all" in message.lower():
             # This is just a summary message, don't treat as completion
-            self.log_to_console(f"📋 {message.strip()}")
+            self.log_to_console(f"{message.strip()}")
             # Don't change progress or status
 
         # Track monitoring phase with queue status
         elif "JOB MONITORING PHASE" in message:
-            self.status_var.set("👀 Monitoring: Tracking job progress in real-time...")
+            self.status_var.set("Monitoring: Tracking job progress in real-time...")
             self.update_overall_progress(40, "Monitoring: Active processing")
             self.log_to_console("🔍 Activating real-time job monitoring...")
 
         # Track failures and errors
         elif "failed" in message.lower() or "error" in message.lower():
-            self.status_var.set("⚠️ Issue detected - check console for details")
-            self.log_to_console(f"⚠️ {message}")
+            self.status_var.set("Issue detected - check console for details")
+            self.log_to_console(f"WARNING: {message}")
 
         # Track queue status updates
         elif "queue" in message.lower() and ("status" in message.lower() or "active" in message.lower()):
-            self.log_to_console(f"📋 {message}")
+            self.log_to_console(f"QUEUE: {message}")
 
         # Track ComfyUI job starts
         elif "Successfully submitted" in message and "jobs" in message:
             # Reset current job tracking when new batch starts
             self.current_progress['value'] = 0
             self.current_job_status.set("Jobs submitted, waiting to start...")
-            self.log_to_console(f"📤 {message.strip()}")
+            self.log_to_console(f"SUBMITTED: {message.strip()}")
 
         # Track ComfyUI step progress for current job
         elif self.processing_phase == "comfyui" and ("step" in message.lower() or "/" in message):
@@ -1758,7 +1757,7 @@ class AppleStyleGUI:
                     step_progress = (current_step / total_steps) * 100
                     self.current_progress['value'] = step_progress
                     self.current_job_status.set(f"Step {current_step}/{total_steps} ({step_progress:.0f}%)")
-                    self.log_to_console(f"🔄 Job Progress: {message.strip()}")
+                    self.log_to_console(f"Job Progress: {message.strip()}")
 
             # Also look for percentage patterns
             percent_match = re.search(r'(\d+(?:\.\d+)?)%', message)
@@ -1766,24 +1765,24 @@ class AppleStyleGUI:
                 percentage = float(percent_match.group(1))
                 self.current_progress['value'] = percentage
                 self.current_job_status.set(f"Processing: {percentage:.1f}%")
-                self.log_to_console(f"🔄 Job Progress: {message.strip()}")
+                self.log_to_console(f"Job Progress: {message.strip()}")
 
         # Track when individual jobs start processing
         elif "starting" in message.lower() and ("job" in message.lower() or "generation" in message.lower() or "prompt" in message.lower()):
             self.current_progress['value'] = 0
             self.current_job_status.set("Processing job...")
-            self.log_to_console(f"⚡ {message.strip()}")
+            self.log_to_console(f"STARTING: {message.strip()}")
 
         # Update simplified queue status
         if hasattr(self, 'simple_queue_status'):
             if self.processing_phase == "comfyui" and self.total_jobs > 0:
                 active = getattr(self, 'total_jobs', 0) - getattr(self, 'completed_jobs', 0)
                 if active > 0:
-                    self.simple_queue_status.set(f"⚡ Active: {active} jobs processing")
+                    self.simple_queue_status.set(f"Active: {active} jobs processing")
                 else:
-                    self.simple_queue_status.set(f"📭 Queue: {self.total_jobs} jobs completed")
+                    self.simple_queue_status.set(f"Queue: {self.total_jobs} jobs completed")
             elif self.processing_phase == "idle":
-                self.simple_queue_status.set("📭 Queue: Empty")
+                self.simple_queue_status.set("Queue: Empty")
 
         # Log to console with proper Unicode encoding
         self.log_to_console(message)
@@ -1819,7 +1818,7 @@ class AppleStyleGUI:
             header_frame = ttk.Frame(popup, style="AppleCard.TFrame")
             header_frame.pack(fill='x', padx=20, pady=(20, 10))
 
-            ttk.Label(header_frame, text="🎨 MuseVision Batch Processing Status",
+            ttk.Label(header_frame, text="MuseVision Batch Processing Status",
                      font=('Arial', 14, 'bold'), style="Apple.TLabel").pack()
 
             if hasattr(self, 'processing_phase') and self.processing_phase:
@@ -1862,7 +1861,7 @@ class AppleStyleGUI:
             button_frame = ttk.Frame(popup, style="Apple.TFrame")
             button_frame.pack(fill='x', padx=20, pady=(0, 20))
 
-            ttk.Button(button_frame, text="🔄 Refresh Status",
+            ttk.Button(button_frame, text="Refresh Status",
                       command=lambda: self.refresh_queue_status(text_widget)).pack(side='right')
 
         except Exception as e:
@@ -1904,10 +1903,10 @@ class AppleStyleGUI:
         header_frame = ttk.Frame(popup, style="AppleCard.TFrame")
         header_frame.pack(fill='x', padx=20, pady=(20, 10))
 
-        ttk.Label(header_frame, text="📝 Processing Console Output",
+        ttk.Label(header_frame, text="Processing Console Output",
                  font=('Arial', 14, 'bold'), style="Apple.TLabel").pack(side='left')
 
-        ttk.Button(header_frame, text="🗑️ Clear",
+        ttk.Button(header_frame, text="Clear",
                   command=lambda: self.console_text.delete('1.0', tk.END)).pack(side='right')
 
         # Console text area
